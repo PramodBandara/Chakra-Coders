@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isStaff() {
+      return request.auth != null && request.auth.token.role in ['admin', 'moderator'];
+    }
+
+    function noteIsApproved(noteId) {
+      return firestore.exists(/databases/(default)/documents/notes/$(noteId))
+        && firestore.get(/databases/(default)/documents/notes/$(noteId)).data.status == 'approved';
+    }
+
+    function validUpload() {
+      return request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('^application/pdf$|^image/jpeg$|^image/png$');
+    }
+
+    match /notes/{uid}/{noteId}/{fileName} {
+      allow read: if isStaff()
+        || (request.auth != null && request.auth.uid == uid)
+        || noteIsApproved(noteId);
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && validUpload();
+      allow delete: if isStaff() || (request.auth != null && request.auth.uid == uid);
+    }
+  }
+}

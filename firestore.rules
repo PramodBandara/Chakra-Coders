@@ -1,0 +1,147 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.role == 'admin';
+    }
+
+    function isStaff() {
+      return signedIn() && request.auth.token.role in ['admin', 'moderator'];
+    }
+
+    function isOwner() {
+      return signedIn() && request.auth.uid == resource.data.uploaderId;
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow list: if isStaff();
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'email', 'role', 'karma', 'createdAt'])
+        && request.resource.data.role == 'student'
+        && request.resource.data.karma == 0
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /notes/{noteId} {
+      function isStaffModeration() {
+        return isStaff()
+          && request.resource.data.uploaderId == resource.data.uploaderId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'declineReason', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.status in ['approved', 'declined', 'removed']
+          && (
+            request.resource.data.status != 'declined'
+            || (
+              request.resource.data.declineReason is string
+              && request.resource.data.declineReason.size() > 0
+              && request.resource.data.declineReason.size() <= 300
+            )
+          );
+      }
+
+      function isOwnerResubmit() {
+        return signedIn()
+          && request.auth.uid == resource.data.uploaderId
+          && resource.data.status == 'declined'
+          && request.resource.data.status == 'pending'
+          && request.resource.data.uploaderId == resource.data.uploaderId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.avgRating == resource.data.avgRating
+          && request.resource.data.ratingCount == resource.data.ratingCount
+          && request.resource.data.score == resource.data.score
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.declineReason == null
+          && request.resource.data.subject is string
+          && request.resource.data.subject.size() > 0
+          && request.resource.data.description is string
+          && request.resource.data.description.size() > 0
+          && request.resource.data.description.size() <= 1000
+          && request.resource.data.tags is list
+          && request.resource.data.tags.size() <= 8
+          && request.resource.data.fileType in ['pdf', 'jpeg', 'png']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'subject',
+            'description',
+            'lessonName',
+            'tags',
+            'status',
+            'declineReason',
+            'fileUrl',
+            'fileType',
+            'updatedAt'
+          ]);
+      }
+
+      allow read: if resource.data.status == 'approved' || isOwner() || isStaff();
+
+      allow create: if signedIn()
+        && request.auth.uid == request.resource.data.uploaderId
+        && request.resource.data.keys().hasOnly([
+          'uploaderId',
+          'subject',
+          'description',
+          'lessonName',
+          'tags',
+          'status',
+          'fileUrl',
+          'fileType',
+          'avgRating',
+          'ratingCount',
+          'score',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() > 0
+        && request.resource.data.subject.size() <= 80
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.description.size() <= 1000
+        && (request.resource.data.lessonName == null
+          || (request.resource.data.lessonName is string && request.resource.data.lessonName.size() <= 120))
+        && request.resource.data.tags is list
+        && request.resource.data.tags.size() <= 8
+        && request.resource.data.fileUrl is string
+        && request.resource.data.fileUrl.size() > 0
+        && request.resource.data.fileUrl.size() < 2000
+        && request.resource.data.fileType in ['pdf', 'jpeg', 'png']
+        && request.resource.data.avgRating == 0
+        && request.resource.data.ratingCount == 0
+        && request.resource.data.score == 3.5
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isStaffModeration() || isOwnerResubmit();
+      allow delete: if false;
+    }
+
+    match /ratings/{ratingId} {
+      allow read, write: if false;
+    }
+
+    match /comments/{commentId} {
+      allow read, write: if false;
+    }
+
+    match /savedNotes/{savedId} {
+      allow read, write: if false;
+    }
+
+    match /reports/{reportId} {
+      allow read, write: if false;
+    }
+  }
+}

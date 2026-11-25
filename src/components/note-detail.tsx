@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SetupPanel } from "@/components/setup-panel";
@@ -48,7 +47,7 @@ export function NoteDetail({ id }: { id: string }) {
   if (noteLoading) return <p className="text-sm text-muted">Loading note…</p>;
   if (error || !note) {
     return (
-      <section className="rounded-3xl border border-line bg-card p-6">
+      <section className="rounded-lg border border-line bg-card p-6">
         <h1 className="font-serif text-3xl">{error ?? "This note is not available."}</h1>
         <Link href="/" className="mt-4 inline-block text-sm font-medium text-pine">
           Back to the library
@@ -60,7 +59,7 @@ export function NoteDetail({ id }: { id: string }) {
   const title = noteTitle(note);
 
   return (
-    <article className="rounded-3xl border border-line bg-card p-6 sm:p-8">
+    <article className="rounded-lg border border-line bg-card p-6 sm:p-8">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-medium tracking-wide text-pine uppercase">{note.subject}</p>
         {note.status !== "approved" ? <StatusBadge status={note.status} /> : null}
@@ -86,12 +85,9 @@ export function NoteDetail({ id }: { id: string }) {
             Open PDF
           </a>
         ) : (
-          <Image
+          <img
             src={note.fileUrl}
             alt={title}
-            width={1200}
-            height={1600}
-            unoptimized
             className="h-auto max-h-[70vh] w-full rounded-2xl border border-line object-contain"
           />
         )}

@@ -35,12 +35,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${sourceSerif.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-dvh bg-white">
         <AuthProvider>
-          <Suspense fallback={<div className="h-16 border-b border-line bg-paper" />}>
-            <SiteHeader />
-          </Suspense>
-          <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">{children}</main>
+          <div className="flex min-h-dvh flex-col md:flex-row">
+            <Suspense fallback={<div className="h-14 border-b border-line bg-white md:h-dvh md:w-[4.75rem] md:border-r lg:w-60" />}>
+              <SiteHeader />
+            </Suspense>
+            <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-24 sm:px-6 md:pb-10 lg:px-10 lg:py-10">{children}</main>
+          </div>
         </AuthProvider>
       </body>
     </html>

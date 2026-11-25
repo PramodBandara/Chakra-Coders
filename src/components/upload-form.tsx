@@ -25,7 +25,7 @@ export function UploadForm({ existing }: { existing?: Note }) {
   if (loading) return <p className="text-sm text-muted">Checking session…</p>;
   if (!user) {
     return (
-      <section className="rounded-3xl border border-line bg-card p-6">
+      <section className="rounded-lg border border-line bg-card p-6">
         <h2 className="font-serif text-3xl">Sign in to upload notes.</h2>
         <p className="mt-2 max-w-lg text-sm leading-6 text-muted">
           Google accounts start as students. A moderator reviews each file before it appears in the library.
@@ -39,7 +39,7 @@ export function UploadForm({ existing }: { existing?: Note }) {
 
   return (
     <form
-      className="rounded-3xl border border-line bg-card p-6 sm:p-8"
+      className="rounded-lg border border-line bg-card p-6 sm:p-8"
       onSubmit={(event) => {
         event.preventDefault();
         setPending(true);

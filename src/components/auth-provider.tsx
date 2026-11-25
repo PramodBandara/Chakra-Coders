@@ -8,8 +8,7 @@ import {
   signOut as firebaseSignOut,
   type User,
 } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { isStaffRole } from "@/lib/constants";
+import { isAdministratorEmail, type AccountRole, type DirectoryPerson } from "@/lib/access";
 import { formatFirebaseError } from "@/lib/errors";
 import { getFirebase, isFirebaseConfigured } from "@/lib/firebase";
 import type { AppRole, UserProfile } from "@/lib/types";
@@ -28,20 +27,42 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function profileFromData(id: string, data: Record<string, unknown>, fallbackEmail: string): UserProfile {
-  const role = data.role === "admin" || data.role === "moderator" || data.role === "student" ? data.role : "student";
-  const createdAt = data.createdAt;
+function profileFromPerson(person: DirectoryPerson): UserProfile {
   return {
-    id,
-    name: typeof data.name === "string" && data.name.trim() ? data.name : "Student",
-    email: typeof data.email === "string" ? data.email : fallbackEmail,
-    role,
-    karma: typeof data.karma === "number" ? data.karma : 0,
-    createdAt:
-      createdAt && typeof createdAt === "object" && "toDate" in createdAt && typeof createdAt.toDate === "function"
-        ? createdAt.toDate()
-        : null,
+    id: person.id,
+    name: person.name,
+    email: person.email,
+    role: person.role,
+    karma: 0,
+    createdAt: null,
   };
+}
+
+async function loadAccount(next: User): Promise<{ role: AccountRole; profile: UserProfile; warning: string | null }> {
+  const token = await next.getIdToken();
+  const response = await fetch("/api/session", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = (await response.json()) as { person?: DirectoryPerson; error?: string };
+  if (!response.ok || !body.person) {
+    if (isAdministratorEmail(next.email)) {
+      return {
+        role: "admin",
+        warning: body.error || "Could not open the account directory.",
+        profile: {
+          id: next.uid,
+          name: next.displayName?.trim() || "Admin",
+          email: next.email ?? "",
+          role: "admin",
+          karma: 0,
+          createdAt: null,
+        },
+      };
+    }
+    throw new Error(body.error || "Could not open this account.");
+  }
+  return { role: body.person.role, profile: profileFromPerson(body.person), warning: null };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -60,39 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     async function loadUser(next: User) {
-      const token = await next.getIdTokenResult();
-      const claim = typeof token.claims.role === "string" ? token.claims.role : null;
+      const account = await loadAccount(next);
       if (cancelled) return;
-      setRole(isStaffRole(claim) ? claim : "student");
-
-      const userRef = doc(firebase!.db, "users", next.uid);
-      const snapshot = await getDoc(userRef);
-      if (cancelled) return;
-
-      if (!snapshot.exists()) {
-        const email = next.email;
-        if (!email) throw new Error("This Google account has no email address.");
-        const name = (next.displayName?.trim() || email.split("@")[0] || "Student").slice(0, 80);
-        await setDoc(userRef, {
-          name,
-          email,
-          role: "student",
-          karma: 0,
-          createdAt: serverTimestamp(),
-        });
-        if (cancelled) return;
-        setProfile({
-          id: next.uid,
-          name,
-          email,
-          role: "student",
-          karma: 0,
-          createdAt: new Date(),
-        });
-        return;
-      }
-
-      setProfile(profileFromData(next.uid, snapshot.data(), next.email ?? ""));
+      setRole(account.role);
+      setProfile(account.profile);
+      setError(account.warning);
     }
 
     const unsubscribe = onAuthStateChanged(firebase.auth, (next) => {
@@ -141,12 +134,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await firebaseSignOut(firebase.auth);
       },
       refreshAccess: async () => {
-        const firebase = getFirebase();
-        const current = firebase?.auth.currentUser;
-        if (!firebase || !current) return;
-        const token = await current.getIdTokenResult(true);
-        const claim = typeof token.claims.role === "string" ? token.claims.role : null;
-        setRole(isStaffRole(claim) ? claim : "student");
+        const current = getFirebase()?.auth.currentUser;
+        if (!current) return;
+        await current.getIdToken(true);
+        const account = await loadAccount(current);
+        setRole(account.role);
+        setProfile(account.profile);
+        setError(account.warning);
       },
     }),
     [configured, loading, user, profile, role, error],

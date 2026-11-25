@@ -1,250 +1,111 @@
-import {
-  Timestamp,
-  collection,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where,
-  type DocumentData,
-} from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { MAX_UPLOADS_PER_DAY, PRIOR_SCORE } from "@/lib/constants";
-import { requireFirebase } from "@/lib/firebase";
-import type { Note, NoteFileType, NoteStatus } from "@/lib/types";
-import {
-  contentTypeFor,
-  noteFileType,
-  parseTags,
-  safeFileName,
-  validateNoteFields,
-  validateNoteFile,
-} from "@/lib/validation";
+import { getFirebase } from "@/lib/firebase";
+import type { Note } from "@/lib/types";
+import type { NoteInput } from "@/lib/notes-input";
 
-export type NoteInput = {
-  subject: string;
-  description: string;
-  lessonName: string;
-  tags: string;
-  file: File | null;
+export type { NoteInput } from "@/lib/notes-input";
+
+type DatedNote = Omit<Note, "createdAt" | "updatedAt"> & {
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
-function asDate(value: unknown) {
-  if (
-    value &&
-    typeof value === "object" &&
-    "toDate" in value &&
-    typeof (value as { toDate: unknown }).toDate === "function"
-  ) {
-    return (value as { toDate: () => Date }).toDate();
-  }
-  return null;
-}
+export type PendingNote = Note & { uploaderName: string; uploaderEmail: string };
 
-function asStatus(value: unknown): NoteStatus {
-  if (value === "approved" || value === "declined" || value === "removed" || value === "pending") {
-    return value;
-  }
-  return "pending";
-}
-
-function asFileType(value: unknown): NoteFileType {
-  if (value === "pdf" || value === "jpeg" || value === "png") return value;
-  return "pdf";
-}
-
-export function mapNote(id: string, data: DocumentData): Note {
+function revive(note: DatedNote): Note {
   return {
-    id,
-    uploaderId: String(data.uploaderId ?? ""),
-    subject: String(data.subject ?? ""),
-    description: String(data.description ?? ""),
-    lessonName: typeof data.lessonName === "string" && data.lessonName.length > 0 ? data.lessonName : null,
-    tags: Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [],
-    status: asStatus(data.status),
-    fileUrl: String(data.fileUrl ?? ""),
-    fileType: asFileType(data.fileType),
-    avgRating: typeof data.avgRating === "number" ? data.avgRating : 0,
-    ratingCount: typeof data.ratingCount === "number" ? data.ratingCount : 0,
-    score: typeof data.score === "number" ? data.score : PRIOR_SCORE,
-    declineReason: typeof data.declineReason === "string" ? data.declineReason : null,
-    createdAt: asDate(data.createdAt),
-    updatedAt: asDate(data.updatedAt),
+    ...note,
+    createdAt: note.createdAt ? new Date(note.createdAt) : null,
+    updatedAt: note.updatedAt ? new Date(note.updatedAt) : null,
   };
+}
+
+async function authHeader(required: boolean): Promise<Record<string, string>> {
+  const user = getFirebase()?.auth.currentUser;
+  if (!user) {
+    if (!required) return {};
+    throw new Error("Sign in again to continue.");
+  }
+  return { Authorization: `Bearer ${await user.getIdToken()}` };
+}
+
+async function readJson<T>(response: Response): Promise<T & { error?: string }> {
+  return (await response.json()) as T & { error?: string };
 }
 
 export function noteTitle(note: Pick<Note, "lessonName" | "subject">) {
   return note.lessonName || `${note.subject} notes`;
 }
 
-async function storeFile(uid: string, noteId: string, file: File) {
-  const fileType = noteFileType(file);
-  if (!fileType) throw new Error("Only PDF, JPEG, and PNG files are allowed.");
-  const firebase = requireFirebase();
-  const fileRef = ref(firebase.storage, `notes/${uid}/${noteId}/${safeFileName(file.name, fileType)}`);
-  await uploadBytes(fileRef, file, { contentType: contentTypeFor(fileType) });
-  const fileUrl = await getDownloadURL(fileRef);
-  return { fileUrl, fileType };
-}
-
-async function assertDailyUploadLimit(uid: string) {
-  const firebase = requireFirebase();
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const snapshot = await getDocs(
-    query(
-      collection(firebase.db, "notes"),
-      where("uploaderId", "==", uid),
-      where("createdAt", ">=", Timestamp.fromDate(start)),
-    ),
-  );
-  if (snapshot.size >= MAX_UPLOADS_PER_DAY) {
-    throw new Error(`You can upload ${MAX_UPLOADS_PER_DAY} notes per day.`);
-  }
-}
-
-function preparedFields(input: NoteInput) {
-  const error = validateNoteFields(input);
-  if (error) throw new Error(error);
-  return {
-    subject: input.subject.trim(),
-    description: input.description.trim(),
-    lessonName: input.lessonName.trim() || null,
-    tags: parseTags(input.tags),
-  };
-}
-
 export async function listApprovedNotes() {
-  const firebase = requireFirebase();
-  const snapshot = await getDocs(
-    query(
-      collection(firebase.db, "notes"),
-      where("status", "==", "approved"),
-      orderBy("score", "desc"),
-      orderBy("createdAt", "desc"),
-      limit(60),
-    ),
-  );
-  return snapshot.docs.map((item) => mapNote(item.id, item.data()));
+  const response = await fetch("/api/notes?view=library", { cache: "no-store" });
+  const body = await readJson<{ notes?: DatedNote[] }>(response);
+  if (!response.ok) throw new Error(body.error || "Could not load notes.");
+  return (body.notes ?? []).map(revive);
 }
 
-export async function listMyNotes(uid: string) {
-  const firebase = requireFirebase();
-  const snapshot = await getDocs(
-    query(
-      collection(firebase.db, "notes"),
-      where("uploaderId", "==", uid),
-      orderBy("createdAt", "desc"),
-      limit(50),
-    ),
-  );
-  return snapshot.docs.map((item) => mapNote(item.id, item.data()));
+export async function listMyNotes(_uid: string) {
+  const response = await fetch("/api/notes?view=mine", { headers: await authHeader(true), cache: "no-store" });
+  const body = await readJson<{ notes?: DatedNote[] }>(response);
+  if (!response.ok) throw new Error(body.error || "Could not load your notes.");
+  return (body.notes ?? []).map(revive);
 }
 
 export async function listPendingNotes() {
-  const firebase = requireFirebase();
-  const snapshot = await getDocs(
-    query(
-      collection(firebase.db, "notes"),
-      where("status", "==", "pending"),
-      orderBy("createdAt", "asc"),
-      limit(50),
-    ),
-  );
-  return snapshot.docs.map((item) => mapNote(item.id, item.data()));
+  const response = await fetch("/api/notes?view=pending", { headers: await authHeader(true), cache: "no-store" });
+  const body = await readJson<{ notes?: Array<DatedNote & { uploaderName?: string; uploaderEmail?: string }> }>(response);
+  if (!response.ok) throw new Error(body.error || "Could not load the review queue.");
+  return (body.notes ?? []).map((note) => ({
+    ...revive(note),
+    uploaderName: note.uploaderName || "Student",
+    uploaderEmail: note.uploaderEmail || "",
+  }));
 }
 
 export async function getNote(noteId: string) {
-  const firebase = requireFirebase();
-  const snapshot = await getDoc(doc(firebase.db, "notes", noteId));
-  if (!snapshot.exists()) return null;
-  return mapNote(snapshot.id, snapshot.data());
+  const response = await fetch(`/api/notes/${noteId}`, { headers: await authHeader(false), cache: "no-store" });
+  const body = await readJson<{ note?: DatedNote }>(response);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(body.error || "Could not open this note.");
+  return body.note ? revive(body.note) : null;
 }
 
-export async function createNote(uid: string, input: NoteInput) {
-  const fileError = validateNoteFile(input.file, true);
-  if (fileError) throw new Error(fileError);
-  const fields = preparedFields(input);
-  await assertDailyUploadLimit(uid);
-
-  const firebase = requireFirebase();
-  const noteRef = doc(collection(firebase.db, "notes"));
-  const stored = await storeFile(uid, noteRef.id, input.file as File);
-
-  await setDoc(noteRef, {
-    uploaderId: uid,
-    subject: fields.subject,
-    description: fields.description,
-    lessonName: fields.lessonName,
-    tags: fields.tags,
-    status: "pending",
-    fileUrl: stored.fileUrl,
-    fileType: stored.fileType,
-    avgRating: 0,
-    ratingCount: 0,
-    score: PRIOR_SCORE,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  return noteRef.id;
+function formDataFor(input: NoteInput) {
+  const body = new FormData();
+  body.set("subject", input.subject);
+  body.set("description", input.description);
+  body.set("lessonName", input.lessonName);
+  body.set("tags", input.tags);
+  if (input.file) body.set("file", input.file);
+  return body;
 }
 
-export async function resubmitNote(uid: string, note: Note, input: NoteInput) {
-  if (note.uploaderId !== uid) throw new Error("You can only edit your own notes.");
-  if (note.status !== "declined") throw new Error("Only declined notes can be resubmitted.");
-  const fileError = validateNoteFile(input.file, false);
-  if (fileError) throw new Error(fileError);
-  const fields = preparedFields(input);
-
-  let fileUrl = note.fileUrl;
-  let fileType = note.fileType;
-  if (input.file) {
-    const stored = await storeFile(uid, note.id, input.file);
-    fileUrl = stored.fileUrl;
-    fileType = stored.fileType;
-  }
-
-  const firebase = requireFirebase();
-  await updateDoc(doc(firebase.db, "notes", note.id), {
-    subject: fields.subject,
-    description: fields.description,
-    lessonName: fields.lessonName,
-    tags: fields.tags,
-    status: "pending",
-    fileUrl,
-    fileType,
-    declineReason: deleteField(),
-    updatedAt: serverTimestamp(),
+export async function createNote(_uid: string, input: NoteInput) {
+  const response = await fetch("/api/notes", {
+    method: "POST",
+    headers: await authHeader(true),
+    body: formDataFor(input),
   });
+  const body = await readJson<{ id?: string }>(response);
+  if (!response.ok || !body.id) throw new Error(body.error || "Could not upload the note.");
+  return body.id;
 }
 
-export async function moderateNote(
-  noteId: string,
-  decision: "approved" | "declined",
-  declineReason?: string,
-) {
-  const firebase = requireFirebase();
-  if (decision === "declined") {
-    const reason = declineReason?.trim() ?? "";
-    if (!reason) throw new Error("Add a reason before declining.");
-    if (reason.length > 300) throw new Error("Keep the decline reason under 300 characters.");
-    await updateDoc(doc(firebase.db, "notes", noteId), {
-      status: "declined",
-      declineReason: reason,
-      updatedAt: serverTimestamp(),
-    });
-    return;
-  }
-
-  await updateDoc(doc(firebase.db, "notes", noteId), {
-    status: "approved",
-    updatedAt: serverTimestamp(),
+export async function resubmitNote(_uid: string, note: Note, input: NoteInput) {
+  const response = await fetch(`/api/notes/${note.id}`, {
+    method: "POST",
+    headers: await authHeader(true),
+    body: formDataFor(input),
   });
+  const body = await readJson<Record<string, never>>(response);
+  if (!response.ok) throw new Error(body.error || "Could not resubmit the note.");
+}
+
+export async function moderateNote(noteId: string, decision: "approved" | "declined", declineReason?: string) {
+  const response = await fetch(`/api/notes/${noteId}`, {
+    method: "PATCH",
+    headers: { ...(await authHeader(true)), "Content-Type": "application/json" },
+    body: JSON.stringify({ decision, declineReason }),
+  });
+  const body = await readJson<Record<string, never>>(response);
+  if (!response.ok) throw new Error(body.error || "Could not update the note.");
 }

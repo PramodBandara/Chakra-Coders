@@ -1,6 +1,6 @@
 export function SetupPanel() {
   return (
-    <section className="rounded-3xl border border-line bg-card p-6 sm:p-8">
+    <section className="rounded-lg border border-line bg-card p-6 sm:p-8">
       <p className="text-sm font-medium tracking-wide text-pine uppercase">Setup</p>
       <h2 className="mt-2 font-serif text-3xl text-ink">Add the Firebase web config for Google sign-in.</h2>
       <ol className="mt-5 space-y-3 text-sm leading-6 text-ink/80">

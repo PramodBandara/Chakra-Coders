@@ -36,7 +36,7 @@ export function Dashboard() {
   if (loading) return <p className="text-sm text-muted">Checking session…</p>;
   if (!user) {
     return (
-      <section className="rounded-3xl border border-line bg-card p-6">
+      <section className="rounded-lg border border-line bg-card p-6">
         <h2 className="font-serif text-3xl">Sign in to see your notes.</h2>
         <div className="mt-5">
           <SignInButton />
@@ -52,7 +52,7 @@ export function Dashboard() {
 
   return (
     <div className="grid gap-6">
-      <section className="grid gap-4 rounded-3xl border border-line bg-card p-6 sm:grid-cols-3">
+      <section className="grid gap-4 rounded-lg border border-line bg-card p-6 sm:grid-cols-3">
         <div>
           <p className="text-xs tracking-wide text-muted uppercase">Signed in</p>
           <p className="mt-1 font-medium">{profile?.name ?? "Student"}</p>
@@ -86,14 +86,14 @@ export function Dashboard() {
       {error ? <p className="text-sm text-clay">{error}</p> : null}
       {notesLoading ? <p className="text-sm text-muted">Loading your notes…</p> : null}
       {!notesLoading && notes.length === 0 ? (
-        <p className="rounded-3xl border border-dashed border-line bg-card px-6 py-10 text-sm text-muted">
+        <p className="rounded-lg border border-dashed border-line bg-card px-6 py-10 text-sm text-muted">
           You have not uploaded a note yet.
         </p>
       ) : null}
 
       <div className="grid gap-3">
         {notes.map((note) => (
-          <article key={note.id} className="rounded-3xl border border-line bg-card p-5">
+          <article key={note.id} className="rounded-lg border border-line bg-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">

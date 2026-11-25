@@ -18,9 +18,12 @@ export function parseTags(input: string) {
 }
 
 export function noteFileType(file: File): NoteFileType | null {
-  if (file.type === "application/pdf") return "pdf";
-  if (file.type === "image/jpeg" || file.type === "image/jpg") return "jpeg";
-  if (file.type === "image/png") return "png";
+  const name = file.name.toLowerCase();
+  if (file.type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (file.type === "image/jpeg" || file.type === "image/jpg" || name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+    return "jpeg";
+  }
+  if (file.type === "image/png" || name.endsWith(".png")) return "png";
   return null;
 }
 

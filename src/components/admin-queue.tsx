@@ -1,17 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
 import { SignInButton } from "@/components/sign-in-button";
 import { SetupPanel } from "@/components/setup-panel";
 import { useAuth } from "@/components/auth-provider";
 import { DECLINE_REASONS, isStaffRole } from "@/lib/constants";
 import { formatFirebaseError } from "@/lib/errors";
-import { getFirebase } from "@/lib/firebase";
-import { listPendingNotes, moderateNote, noteTitle } from "@/lib/notes";
-import type { Note } from "@/lib/types";
+import { listPendingNotes, moderateNote, noteTitle, type PendingNote } from "@/lib/notes";
 
-type QueueItem = Note & { uploaderName: string; uploaderEmail: string };
+type QueueItem = PendingNote;
 
 export function AdminQueue() {
   const { configured, loading, user, role, refreshAccess } = useAuth();
@@ -23,27 +20,7 @@ export function AdminQueue() {
   const [preset, setPreset] = useState<string>(DECLINE_REASONS[0]);
   const [detail, setDetail] = useState("");
 
-  const loadQueue = useCallback(async () => {
-    const notes = await listPendingNotes();
-    const firebase = getFirebase();
-    const withUploaders = await Promise.all(
-      notes.map(async (note) => {
-        if (!firebase) return { ...note, uploaderName: "Student", uploaderEmail: "" };
-        try {
-          const snapshot = await getDoc(doc(firebase.db, "users", note.uploaderId));
-          const data = snapshot.data();
-          return {
-            ...note,
-            uploaderName: typeof data?.name === "string" ? data.name : "Student",
-            uploaderEmail: typeof data?.email === "string" ? data.email : "",
-          };
-        } catch {
-          return { ...note, uploaderName: "Student", uploaderEmail: "" };
-        }
-      }),
-    );
-    return withUploaders;
-  }, []);
+  const loadQueue = useCallback(async () => listPendingNotes(), []);
 
   useEffect(() => {
     if (!user || !isStaffRole(role)) return;
@@ -64,7 +41,7 @@ export function AdminQueue() {
   if (loading) return <p className="text-sm text-muted">Checking session…</p>;
   if (!user) {
     return (
-      <section className="rounded-3xl border border-line bg-card p-6">
+      <section className="rounded-lg border border-line bg-card p-6">
         <h2 className="font-serif text-3xl">Sign in to review notes.</h2>
         <div className="mt-5">
           <SignInButton />
@@ -74,11 +51,10 @@ export function AdminQueue() {
   }
   if (!isStaffRole(role)) {
     return (
-      <section className="rounded-3xl border border-line bg-card p-6">
+      <section className="rounded-lg border border-line bg-card p-6">
         <h2 className="font-serif text-3xl">This queue is for admins and moderators.</h2>
         <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
-          Google sign-in creates a student account. An existing admin sets the admin or moderator claim with
-          scripts/set-role.mjs. After that, sign out and back in, or refresh access.
+          Signed-in students can upload notes. The administrator grants moderator access from this page.
         </p>
         <button type="button" className="btn btn-quiet mt-5" onClick={() => void refreshAccess()}>
           Refresh access
@@ -134,7 +110,7 @@ export function AdminQueue() {
 
       {error ? <p className="text-sm text-clay">{error}</p> : null}
 
-      <div className="grid gap-3 rounded-3xl border border-line bg-card p-5 sm:grid-cols-[minmax(0,16rem)_1fr]">
+      <div className="grid gap-3 rounded-lg border border-line bg-card p-5 sm:grid-cols-[minmax(0,16rem)_1fr]">
         <label>
           <span className="label">Decline reason</span>
           <select className="field" value={preset} onChange={(event) => setPreset(event.target.value)}>
@@ -158,13 +134,13 @@ export function AdminQueue() {
       </div>
 
       {!queueLoading && items.length === 0 ? (
-        <p className="rounded-3xl border border-dashed border-line bg-card px-6 py-10 text-sm text-muted">
+        <p className="rounded-lg border border-dashed border-line bg-card px-6 py-10 text-sm text-muted">
           Nothing is waiting for review.
         </p>
       ) : null}
 
       {items.map((note) => (
-        <article key={note.id} className="rounded-3xl border border-line bg-card p-5">
+        <article key={note.id} className="rounded-lg border border-line bg-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="font-serif text-2xl">{noteTitle(note)}</h2>

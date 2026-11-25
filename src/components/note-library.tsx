@@ -80,7 +80,7 @@ export function NoteLibrary() {
       {error ? <p className="mt-4 rounded-2xl bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p> : null}
 
       {!loading && !error && visible.length === 0 ? (
-        <div className="mt-6 rounded-3xl border border-dashed border-line bg-card px-6 py-12 text-center">
+        <div className="mt-6 rounded-lg border border-dashed border-line bg-card px-6 py-12 text-center">
           <h2 className="font-serif text-2xl">No approved notes in this view.</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
             Uploads stay private until an admin or moderator accepts them. The public library only shows approved notes.

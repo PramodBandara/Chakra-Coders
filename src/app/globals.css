@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-paper: #f3ecdf;
-  --color-ink: #1c1712;
-  --color-muted: #6b6156;
-  --color-line: #e4d8c6;
-  --color-card: #fffdf8;
-  --color-pine: #14594f;
-  --color-pine-dark: #0d3f38;
-  --color-clay: #9a3b24;
-  --color-gold: #8a5a12;
+  --color-paper: #ffffff;
+  --color-ink: #37352f;
+  --color-muted: #787774;
+  --color-line: #e9e9e7;
+  --color-card: #ffffff;
+  --color-pine: #2383e2;
+  --color-pine-dark: #1a6fc4;
+  --color-clay: #eb5757;
+  --color-gold: #cb912f;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-source-serif);
@@ -17,19 +17,19 @@
 
 @layer components {
   .btn {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex h-8 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60;
   }
   .btn-primary {
-    @apply bg-pine text-paper hover:bg-pine-dark;
+    @apply bg-ink text-white hover:bg-black;
   }
   .btn-quiet {
-    @apply bg-card text-ink ring-1 ring-line hover:bg-white;
+    @apply bg-white text-ink ring-1 ring-line hover:bg-[#f7f7f5];
   }
   .btn-danger {
-    @apply bg-clay text-white hover:bg-[#7d2e1c];
+    @apply bg-clay text-white hover:bg-[#d64545];
   }
   .field {
-    @apply w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink outline-none ring-pine/30 placeholder:text-muted/70 focus:ring-2;
+    @apply w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none placeholder:text-muted/80 focus:border-pine focus:ring-2 focus:ring-pine/20;
   }
   .label {
     @apply mb-1.5 block text-sm font-medium text-ink;

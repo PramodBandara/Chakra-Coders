@@ -50,7 +50,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           {!configured ? (
-            <span className="text-sm text-muted">Firebase not connected</span>
+            <span className="text-sm text-muted">Google sign-in not configured</span>
           ) : loading ? (
             <span className="text-sm text-muted">Checking session…</span>
           ) : signedIn ? (
